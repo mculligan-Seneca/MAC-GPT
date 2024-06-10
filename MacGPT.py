@@ -1,6 +1,6 @@
 #Main module for backend chatbot
 import chromadb
-from llama_index.core import VectorStoreIndex
+from llama_index.core import VectorStoreIndex, SummaryIndex
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.query_engine import RetrieverQueryEngine
@@ -21,7 +21,7 @@ import os
 class MacGPT:
     
     __CHROMADB_PATH="./chroma_db"
-    __TOP_K=10
+    __TOP_K=5
     __RESPONSE_MODES={
         "compact":ResponseMode.COMPACT,
         "refine":ResponseMode.REFINE,
@@ -49,6 +49,7 @@ class MacGPT:
                 transformations=[text_splitter],
                
             )
+            
         else:
             self.__index=VectorStoreIndex.from_vector_store(
                 vector_store=vector_store,
@@ -72,7 +73,6 @@ class MacGPT:
             similarity_top_k=kwargs.get("top_k",self.__TOP_K), 
             vector_store_query_mode="default",
             llm=llm
-            
             )
         
         # https://docs.llamaindex.ai/en/stable/module_guides/evaluating/usage_pattern/
@@ -87,27 +87,38 @@ class MacGPT:
         # https://www.bluelabellabs.com/blog/llamaindex-response-modes-explained/
         response_synthesizer = get_response_synthesizer(
             response_mode=self.__RESPONSE_MODES.get(kwargs.get("response_mode","refine")),
-            llm=llm
+            llm=llm,
+            streaming=True
             )
         # https://docs.llamaindex.ai/en/stable/module_guides/deploying/query_engine/usage_pattern/
         # chat_engine = index.as_chat_engine(streaming=True, similarity_top_k=1)
 
         # assemble chat engine
-        self.__query_engine=RetrieverQueryEngine(
+        """self.__chat_engine=self.__index.as_chat_engine(
+            streaming=True,
+            llm=llm,
+            similarity_top_k=self.__TOP_K,
+            response_synthesizer=response_synthesizer)"""
+        
+        self.__chat_engine=RetrieverQueryEngine(
             retriever=self.__retriever,
             response_synthesizer=response_synthesizer,
+          
             # node_postprocessors=[SimilarityPostprocessor(similarity_cutoff=0.7)],   #Only use with documents directly and not database
         )
      
 
     def query(self,prompt):
-        response=self.__query_engine.query(prompt)
-        faithfulness=self.__evaluator_f.evaluate_response(response=response)
-        relevance=self.__evaluator_r.evaluate_response(query=prompt,response=response)
+        response=self.__chat_engine.query(prompt)
+        faithfulness="Faithful"#self.__evaluator_f.evaluate_response(response=response)
+        relevance="Relevance"#self.__evaluator_r.evaluate_response(query=prompt,response=response)
         return dict({'response': response,'faithfulness':faithfulness,'relevance':relevance})
 
     def add_documents(self, documents):
-        for doc in documents:
-            self.__index.insert(doc)
+        self.__index.refresh_ref_docs(documents)
 
 
+
+#TODO: Improve LLM model performance 
+#TODO: TAG node chuncks with metadata for nodes
+#TODO: Investigate Summary index for improving query retrieval
