@@ -18,6 +18,7 @@ from llama_index.core.query_engine.retriever_query_engine import (
 )
 from llama_index.core.response_synthesizers import ResponseMode
 import os
+import time
 class MacGPT:
     
     __CHROMADB_PATH="./chroma_db"
@@ -87,8 +88,8 @@ class MacGPT:
         # https://www.bluelabellabs.com/blog/llamaindex-response-modes-explained/
         response_synthesizer = get_response_synthesizer(
             response_mode=self.__RESPONSE_MODES.get(kwargs.get("response_mode","refine")),
-            llm=llm,
-            streaming=True
+            llm=llm
+           
             )
         # https://docs.llamaindex.ai/en/stable/module_guides/deploying/query_engine/usage_pattern/
         # chat_engine = index.as_chat_engine(streaming=True, similarity_top_k=1)
@@ -106,16 +107,26 @@ class MacGPT:
           
             # node_postprocessors=[SimilarityPostprocessor(similarity_cutoff=0.7)],   #Only use with documents directly and not database
         )
+        self.__chat_log=[]
      
 
     def query(self,prompt):
+        start_time=time.time()
         response=self.__chat_engine.query(prompt)
-        faithfulness="Faithful"#self.__evaluator_f.evaluate_response(response=response)
-        relevance="Relevance"#self.__evaluator_r.evaluate_response(query=prompt,response=response)
-        return dict({'response': response,'faithfulness':faithfulness,'relevance':relevance})
+        finish_time=time.time()
+        self.__chat_log.append((prompt,response,start_time,finish_time))
+   
+        return response
 
     def add_documents(self, documents):
         self.__index.refresh_ref_docs(documents)
+    
+    def get_chat_log(self):
+        return list(self.__chat_log)
+    
+    def avg_response_time(self):
+        #subtract start time from finish time and compute average
+        return sum(map(lambda log: log[3]-log[2],self.__chat_log))/len(self.__chat_log)
 
 
 
