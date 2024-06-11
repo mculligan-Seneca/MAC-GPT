@@ -1,0 +1,5 @@
+input_data
+venv
+.DS_Store
+.vscode
+__pycache__
